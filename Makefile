@@ -9,3 +9,6 @@ run_with_arg_1:
 
 run_with_arg_2:
 	go run myapp.go -s "i'll follow you as long as you are following me"
+
+run_with_arg_3:
+	go run myapp.go -s "follow, follow, followers!"
