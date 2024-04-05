@@ -84,6 +84,7 @@ func showDb(numComics int, pathDb string) {
 	// в зависимости от флага выводим нужное количество комиксов
 	if numComics == Default {
 		i := 1
+		// выводим всё комиксы
 		for id, comics := range db {
 			printComics(i, &comics, id)
 			i++
@@ -93,6 +94,7 @@ func showDb(numComics int, pathDb string) {
 		countComics := math.Min(float64(numComics), float64(len(db)))
 		i := 1
 		for id, comics := range db {
+			// выводим countComics комиксов
 			if i <= int(countComics) {
 				printComics(i, &comics, id)
 			}
