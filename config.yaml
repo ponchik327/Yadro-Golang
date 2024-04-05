@@ -1,4 +1,2 @@
-source_url:
-  -url: https://xkcd.com
-  
+source_url: https://xkcd.com
 db_file: database.json
