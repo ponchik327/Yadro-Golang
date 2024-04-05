@@ -1,4 +1,4 @@
-module words
+module github.com/ponchik327/Yadro-Golang/tree/main/pkg/words
 
 go 1.22.1
 
