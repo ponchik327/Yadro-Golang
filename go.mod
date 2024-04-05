@@ -1,4 +1,4 @@
-module github.com/ponchik327/Yadro-Golang/tree/main/cmd/xkcd
+module github.com/ponchik327/Yadro-Golang/tree/main
 
 go 1.22.1
 
