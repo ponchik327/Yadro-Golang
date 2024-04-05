@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ponchik327/Yadro-Golang/tree/main/pkg/xkcd"
+	"github.com/ponchik327/Yadro-Golang/tree/main/cmd/xkcd/pkg/xkcd"
 	"gopkg.in/yaml.v2"
 )
 
