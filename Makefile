@@ -1,5 +1,11 @@
+build: 
+	go build -o  cmd/xkcd/xkcd.exe cmd/xkcd/main.go
+
+run_exe: 
+	cmd/xkcd/xkcd.exe -o -n 2
+
 run: 
-	cd cmd/xkcd && go run main.go
+	go run cmd/xkcd/main.go
 
 run_with_arg: 
-	cd cmd/xkcd && go run main.go -o -n 5
+	go run cmd/xkcd/main.go -o -n 3

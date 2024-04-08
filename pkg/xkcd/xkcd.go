@@ -2,7 +2,6 @@ package xkcd
 
 import (
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -30,15 +29,9 @@ func parseOneComics(endpoint string) (Comics, error) {
 		return Comics{}, err
 	}
 
-	// читаем ответ в массив байтов
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return Comics{}, err
-	}
-
-	// преобразуем ответ в структуру
+	// читаем ответ и преобразуем ответ в структуру
 	var comics Comics
-	err = json.Unmarshal(body, &comics)
+	err = json.NewDecoder(resp.Body).Decode(&comics)
 	if err != nil {
 		return Comics{}, err
 	}
@@ -69,29 +62,29 @@ func ParseComics(sourceUrl string) ([]Comics, error) {
 	// парсим послендий для понимания, сколько их всего
 	lastComics, err := parseLastComics(sourceUrl)
 	if err != nil {
-		return []Comics{}, err
+		return nil, err
 	}
 
-	var allComics []Comics
-	allComics = append(allComics, lastComics)
+	var allComics = make([]Comics, lastComics.Id)
+	allComics[0] = lastComics
 
 	// добавляем все спаршенные комиксы в массив
 	for i := 1; i < lastComics.Id; i++ {
 		// задаём url
 		urlComics, err := url.JoinPath(sourceUrl, strconv.Itoa(i), endPointGetComics)
 		if err != nil {
-			return []Comics{}, err
+			return nil, err
 		}
 
 		// парсим одну штуку
 		comics, err := parseOneComics(urlComics)
 		if err != nil {
-			return []Comics{}, err
+			return nil, err
 		}
 
 		// добавляем в массив
 		if comics.Id != 0 {
-			allComics = append(allComics, comics)
+			allComics[i] = comics
 		}
 	}
 

@@ -1,13 +1,11 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"log"
 	"math"
 	"os"
-	"path/filepath"
 	"strconv"
 
 	"github.com/ponchik327/Yadro-Golang/tree/main/pkg/database"
@@ -22,32 +20,32 @@ type Config struct {
 
 // Читает конфиг
 func loadConfig(path string) (Config, error) {
+	fmt.Println(path)
 	bytes, err := os.ReadFile(path)
 
 	if err != nil {
-		return Config{}, errors.New("unable to load config file")
+		return Config{}, fmt.Errorf("unable to load config file, err: %w", err)
 	}
 
 	var config Config
 	err = yaml.Unmarshal(bytes, &config)
 
 	if err != nil {
-		return Config{}, errors.New("yaml decode error")
+		return Config{}, fmt.Errorf("yaml decode error, err: %w", err)
 	}
 
 	return config, nil
 }
 
-const Default int = 0
-
 // Парсит флаги
-func parseFlags() (bool, int) {
+func parseFlags() (string, bool, int) {
+	pathConfig := flag.String("c", "config.yaml", "path to config file")
 	needShowDb := flag.Bool("o", false, "display db")
-	numComics := flag.Int("n", Default, "count comics to display")
+	numComics := flag.Int("n", math.MaxInt, "count comics to display")
 
 	flag.Parse()
 
-	return *needShowDb, *numComics
+	return *pathConfig, *needShowDb, *numComics
 }
 
 // Печатает комикс
@@ -82,7 +80,7 @@ func showDb(numComics int, pathDb string) {
 	}
 
 	// в зависимости от флага выводим нужное количество комиксов
-	if numComics == Default {
+	if numComics == math.MaxInt {
 		i := 1
 		// выводим всё комиксы
 		for id, comics := range db {
@@ -104,17 +102,16 @@ func showDb(numComics int, pathDb string) {
 }
 
 func main() {
-	rootDir := filepath.Join("..", "..")
+	pathConfig, needShowDb, numComics := parseFlags()
 
 	// Загружаем конфиг из config.yaml c обработкой ошибок
-	pathConfig := filepath.Join(rootDir, "config.yaml")
 	config, err := loadConfig(pathConfig)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Проверяем существует ли база, если нет, то создаём
-	pathDb := filepath.Join(rootDir, config.DbFile)
+	pathDb := config.DbFile
 	if _, err := os.Stat(pathDb); err != nil {
 		fmt.Println(config.DbFile + " not exist")
 		createDatabase(config, pathDb)
@@ -122,8 +119,7 @@ func main() {
 		fmt.Println(config.DbFile + " exist")
 	}
 
-	// Считываем флаги и обрабатываем их
-	needShowDb, numComics := parseFlags()
+	// Обрабатываем флаги -o и -n
 	if needShowDb {
 		showDb(numComics, pathDb)
 	}
