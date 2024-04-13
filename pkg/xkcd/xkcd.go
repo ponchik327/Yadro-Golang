@@ -15,78 +15,72 @@ type Comics struct {
 	Alternative string `json:"alt"`
 }
 
-// Обработка одного комикса
-func parseOneComics(endpoint string) (Comics, error) {
-	// делаем запрос
+// Клиент для парса комиксов
+type Client struct {
+	SourceUrl string
+	EndPoints map[string]string
+}
+
+// Контсруктор
+func NewClient(sourceUrl string) *Client {
+	// список возможных путей
+	endPoints := map[string]string{
+		"GetComics": "info.0.json",
+	}
+
+	return &Client{
+		SourceUrl: sourceUrl,
+		EndPoints: endPoints,
+	}
+}
+
+// Возвращает комикс если такой можно спарсить, в пративном случае пустой комикс
+func (c *Client) GetComicsById(IdComics int) Comics {
+	endpoint := c.makeEndpoint(IdComics)
+	comics := c.parseOneComics(endpoint)
+
+	return comics
+}
+
+// Id последнего комикса
+func (c *Client) GetIdLastComics() int {
+	urlLastComics, err := url.JoinPath(c.SourceUrl, c.EndPoints["GetComics"])
+	if err != nil {
+		panic(err)
+	}
+
+	lastComics := c.parseOneComics(urlLastComics)
+
+	return lastComics.Id
+}
+
+// Парсит один комикс
+func (c *Client) parseOneComics(endpoint string) Comics {
+	// делаем get-запрос
 	resp, err := http.Get(endpoint)
 	if err != nil {
-		return Comics{}, err
+		panic(err)
 	}
 	defer resp.Body.Close()
 
-	// проверяем, что ответ пришёл корректно
-	if resp.Status != "200 OK" {
-		return Comics{}, err
-	}
-
-	// читаем ответ и преобразуем ответ в структуру
+	// если статус ответа 200, то заполняем Comics
 	var comics Comics
-	err = json.NewDecoder(resp.Body).Decode(&comics)
-	if err != nil {
-		return Comics{}, err
+	if resp.StatusCode == http.StatusOK {
+		err = json.NewDecoder(resp.Body).Decode(&comics)
+		if err != nil {
+			panic(err)
+		}
 	}
 
-	return comics, nil
+	return comics
 }
 
-const endPointGetComics = "info.0.json"
-
-// Парсим последний комикс отдельно, чтобы узнать сколько их всего
-func parseLastComics(sourceUrl string) (Comics, error) {
-	urlLastComics, err := url.JoinPath(sourceUrl, endPointGetComics)
+// Подготавливает url для получения комиксов по их id
+func (c *Client) makeEndpoint(IdComics int) string {
+	urlComics, err := url.JoinPath(c.SourceUrl, strconv.Itoa(IdComics), c.EndPoints["GetComics"])
 	if err != nil {
-		return Comics{}, err
+		panic(err)
 	}
 
-	lastComics, err := parseOneComics(urlLastComics)
-	if err != nil {
-		return Comics{}, err
-	}
-
-	return lastComics, nil
-}
-
-// Парсим все комиксы со страницы
-func ParseComics(sourceUrl string) ([]Comics, error) {
-
-	// парсим послендий для понимания, сколько их всего
-	lastComics, err := parseLastComics(sourceUrl)
-	if err != nil {
-		return nil, err
-	}
-
-	var allComics = make([]Comics, lastComics.Id)
-	allComics[0] = lastComics
-
-	// добавляем все спаршенные комиксы в массив
-	for i := 1; i < lastComics.Id; i++ {
-		// задаём url
-		urlComics, err := url.JoinPath(sourceUrl, strconv.Itoa(i), endPointGetComics)
-		if err != nil {
-			return nil, err
-		}
-
-		// парсим одну штуку
-		comics, err := parseOneComics(urlComics)
-		if err != nil {
-			return nil, err
-		}
-
-		// добавляем в массив
-		if comics.Id != 0 {
-			allComics[i] = comics
-		}
-	}
-
-	return allComics, nil
+	return urlComics
 }

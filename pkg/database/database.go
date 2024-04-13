@@ -3,10 +3,6 @@ package database
 import (
 	"encoding/json"
 	"os"
-	"strings"
-
-	"github.com/ponchik327/Yadro-Golang/tree/main/pkg/words"
-	"github.com/ponchik327/Yadro-Golang/tree/main/pkg/xkcd"
 )
 
 // Представление даннх в бд
@@ -15,38 +11,52 @@ type ComicsDb struct {
 	KeyWords []string `json:"keywords"`
 }
 
-// Из вектора комиксов в представлении при парсинге (Comics)
-// Длает мапу по id представлений комикса в бд (ComicsDb)
-func CreateDatabase(comics []xkcd.Comics, pathDb string) {
-	db := map[int]ComicsDb{}
-
-	// пробразуем массив в мапу с нужными полями
-	// попутно делаем стемминг транскрипциии и альтернативного представления
-	for _, oneComics := range comics {
-		db[oneComics.Id] = ComicsDb{
-			Image:    oneComics.Image,
-			KeyWords: words.StemWords(strings.Fields(oneComics.Transcript + " " + oneComics.Alternative)),
-		}
-	}
-
-	// пишем получившуюся мапу в файл database.json
-	bytes, _ := json.MarshalIndent(db, "", "\t")
-	os.WriteFile(pathDb, bytes, 0644)
+// Бд для хранения комиксов
+type DataBase struct {
+	Path string
 }
 
-// Вытаскиваем из бд представление комиксов в виде мапы
-func GetDatabase(pathDb string) (map[int]ComicsDb, error) {
+// Конструктор
+func NewDataBase(path string) *DataBase {
+	return &DataBase{
+		Path: path,
+	}
+}
+
+// Добавляет комикс в бд
+func (DB *DataBase) AddOneComics(Id int, comics ComicsDb) {
+	var mapDb map[int]ComicsDb
+
+	// если добавляем первый комикс, значит файл пуст и надо создать мапу
+	if Id == 1 {
+		mapDb = make(map[int]ComicsDb)
+	} else {
+		mapDb = DB.GetDatabase()
+	}
+
+	// добавили комикс
+	mapDb[Id] = comics
+
+	// записали комикс
+	bytes, _ := json.MarshalIndent(mapDb, "", "\t")
+	os.WriteFile(DB.Path, bytes, 0644)
+}
+
+// Получаем бд из файла в виде мапы, нельзя вызывать если файла не существует
+func (DB *DataBase) GetDatabase() map[int]ComicsDb {
 	db := map[int]ComicsDb{}
 
-	bytes, err := os.ReadFile(pathDb)
+	// читаем файл
+	bytes, err := os.ReadFile(DB.Path)
 	if err != nil {
-		return db, err
+		panic(err)
 	}
 
+	// заполняем мапу
 	err = json.Unmarshal(bytes, &db)
 	if err != nil {
-		return db, err
+		panic(err)
 	}
 
-	return db, nil
+	return db
 }
