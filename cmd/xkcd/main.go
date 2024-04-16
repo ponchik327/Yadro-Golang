@@ -1,7 +1,10 @@
 package main
 
-import "fmt"
+import (
+	"github.com/ponchik327/Yadro-Golang/tree/main/internal/app"
+)
 
 func main() {
-	fmt.Println("start")
+	// точка входа
+	app.RunApp()
 }

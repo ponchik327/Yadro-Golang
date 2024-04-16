@@ -8,6 +8,7 @@ import (
 	"github.com/kljensen/snowball"
 )
 
+// Загрузка стоп-слов из файла stop_words_english.txt в мапу, для удобства проверки
 func loadStopWords(path string) map[string]bool {
 
 	file, err := os.Open(path)
@@ -25,6 +26,7 @@ func loadStopWords(path string) map[string]bool {
 	return stopWords
 }
 
+// Вспомогательная функция для чистки слов
 func deleteNonLetters(s string) string {
 	var result strings.Builder
 	for i := 0; i < len(s); i++ {
@@ -37,23 +39,30 @@ func deleteNonLetters(s string) string {
 	return result.String()
 }
 
+// Реализация стемминга из прошлого задания, вынес в функцию для просты использования
 func StemWords(words []string) []string {
 
 	stopWords := loadStopWords("stop_words_english.txt")
 
+	// мапа для проверки повторяющихся слов
 	var encountWords = make(map[string]bool)
+	// массив очищенных слов
 	stemmedWords := make([]string, 0)
 
 	for _, word := range words {
 
 		word = strings.ToLower(word)
 
+		// первая проверка на стоп-слово
 		_, isStopWord := stopWords[word]
 		if !isStopWord {
 
 			stemmed, err := snowball.Stem(deleteNonLetters(word), "english", true)
 
+			// вторая проверка на стоп-слово
+			// почему-то некоторые слова после стемминга начинали подходить под стоп-слова
 			_, isStopWord = stopWords[stemmed]
+
 			_, isEncount := encountWords[stemmed]
 
 			if (err == nil) &&
