@@ -1,38 +1,27 @@
 package app
 
 import (
-	"fmt"
 	"log"
-	"os"
 
 	"github.com/ponchik327/Yadro-Golang/tree/main/internal/config"
 	"github.com/ponchik327/Yadro-Golang/tree/main/internal/utilsDb"
-	"github.com/ponchik327/Yadro-Golang/tree/main/pkg/database"
 )
 
 // Логика работы приложения
 func RunApp() {
-	pathConfig, needShowDb, numComics := utilsDb.ParseFlags()
+	// парсим флаги
+	pathConfig := utilsDb.ParseFlags()
 
-	// Загружаем конфиг из config.yaml c обработкой ошибок
+	// загружаем конфиг из config.yaml
 	config, err := config.LoadConfig(pathConfig)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("error open config: " + err.Error())
 	}
 
-	// Проверяем существует ли база, если нет, то создаём
-	pathDb := config.DbFile
-	var db *database.DataBase
-	if _, err := os.Stat(pathDb); err != nil {
-		fmt.Println(config.DbFile + " not exist")
-		db = utilsDb.CreateDatabase(config.SourceUrl, config.DbFile, pathDb)
-	} else {
-		fmt.Println(config.DbFile + " exist")
-		db = database.NewDataBase(pathDb)
+	// создаём бд
+	db, err := utilsDb.CreateDatabase(config.SourceUrl, config.DbFile, config.NumGorutine)
+	if err != nil {
+		log.Fatal("error create database: " + err.Error())
 	}
-
-	// Обрабатываем флаги -o и -n
-	if needShowDb {
-		utilsDb.ShowDb(numComics, db)
-	}
+	defer db.Close()
 }

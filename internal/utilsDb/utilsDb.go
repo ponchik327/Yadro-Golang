@@ -1,11 +1,16 @@
 package utilsDb
 
 import (
+	"context"
 	"flag"
 	"fmt"
-	"math"
+	"os"
+	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"syscall"
 
 	"github.com/ponchik327/Yadro-Golang/tree/main/pkg/database"
 	"github.com/ponchik327/Yadro-Golang/tree/main/pkg/words"
@@ -13,80 +18,153 @@ import (
 )
 
 // Парсит флаги
-func ParseFlags() (string, bool, int) {
+func ParseFlags() string {
 	pathConfig := flag.String("c", "config.yaml", "path to config file")
-	needShowDb := flag.Bool("o", false, "display db")
-	numComics := flag.Int("n", math.MaxInt, "count comics to display")
-
 	flag.Parse()
 
-	return *pathConfig, *needShowDb, *numComics
+	return *pathConfig
+}
+
+// Структура для удобства передачи ресурсов в воркер
+type Resources struct {
+	DataBase *database.DataBase
+	Client   *xkcd.Client
+}
+
+// Задача, которую выполянет воркер выведена в отдельную функцию, которая ему передаётся
+type funcWork func(id int, db *database.DataBase, client *xkcd.Client)
+
+// В будущем передадим в воркер
+func work(id int, db *database.DataBase, client *xkcd.Client) {
+	// парсим с клиента
+	comics := client.GetComicsById(id)
+	// если не пустой
+	if comics.Id != 0 {
+		// конвертируем комикс спаршенный в представление бд
+		comicsDb := convertComics(comics)
+		// добавляем его в бд
+		db.AddOneComics(id, comicsDb)
+	}
 }
 
 // Создаёт бд
-func CreateDatabase(sourceUrl string, dbFile string, pathDb string) *database.DataBase {
+func CreateDatabase(sourceUrl string, pathDb string, numGorutine int) (*database.DataBase, error) {
 	// создаём клиент и делаем запрос на id последнего комикса
 	client := xkcd.NewClient(sourceUrl)
 	idLastComics := client.GetIdLastComics()
 
-	// в цикле проходимся по всем id и заполняем бд
-	db := database.NewDataBase(pathDb)
-	for id := 1; id <= idLastComics; id++ {
-		// каждые 100 комиксов пишем прогресс
-		if id%100 == 0 {
-			fmt.Println("load " + strconv.Itoa(id) + " comics")
-		}
-
-		// парсим с клиента
-		comics := client.GetComicsById(id)
-		// если не пустой
-		if comics.Id != 0 {
-			// конвертируем комикс спаршенный в представление бд
-			comicsDb := convertComics(comics)
-			// добавляем его в бд
-			db.AddOneComics(id, comicsDb)
-		}
+	// открываем бд
+	db, err := database.Open(pathDb)
+	if err != nil {
+		return nil, fmt.Errorf("error open database: %w", err)
 	}
 
-	fmt.Println(dbFile + " create")
-	return db
+	// создаём контекст с отменой, который передаим воркерам
+	ctx, cancel := context.WithCancel(context.Background())
+	// запускаем горутину отвечающую за перехват сигналов системы
+	// и вызов cancel() для реализации gracefully shutdown
+	go notifyEndWork(cancel)
+	defer cancel()
+
+	resources := Resources{
+		DataBase: db,
+		Client:   client,
+	}
+
+	// запускаем воркер-пул, передаём контекст, кол-во воркеров, максимальное кол-во задач, необходимые ресурсы и функцию с задачей
+	workerPool(ctx, numGorutine, idLastComics, resources, work)
+
+	fmt.Println(filepath.Base(pathDb) + " create")
+	return db, nil
 }
 
-// Отображаем записи из бд в нужном количестве
-func ShowDb(numComics int, dataBase *database.DataBase) {
-	// достаём всю базу данных в виде мапы
-	mapDb := dataBase.GetDatabase()
+// Отлавливает сигналы системы и вызывает cancel() контекста
+func notifyEndWork(cancel context.CancelFunc) {
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	<-sigChan
+	cancel()
+}
 
-	// в зависимости от флага выводим нужное количество комиксов
-	if numComics == math.MaxInt {
-		i := 1
-		// выводим всё комиксы
-		for id, comics := range mapDb {
-			printComics(i, &comics, id)
-			i++
+// Запускает паралельную обработку
+func workerPool(ctx context.Context, countWorkers int, countTasks int, resources Resources, work funcWork) {
+	wg := &sync.WaitGroup{}
+	// по этому каналу будем подавать айди комиксов котрые надо обработать
+	idComics := make(chan int, countTasks)
+	// если обработка прошла успешно в этот канал придёт пустая структура
+	result := make(chan struct{}, countTasks)
+
+	// запускаем воркеры в отдельных горутнах, добавляю каждому задачу в ваит группе
+	for i := 0; i < countWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			worker(ctx, idComics, result, resources, work)
+		}()
+	}
+
+	// эта горутина через канал отправляет id комиксов, которые надо обработать
+	go giveTaks(countTasks, resources.DataBase, idComics)
+
+	// эта горутина отвечает за вывод в консоль уведоление о скачки 100 комиксов
+	go writeNotifications(ctx, result)
+
+	wg.Wait()
+	close(result)
+}
+
+// Даёт воркерам id, также проверяет есть ли данный ключ в бд, если есть, то не обрабатываем
+func giveTaks(countTasks int, db *database.DataBase, idComics chan<- int) {
+	for id := 1; id <= countTasks; id++ {
+		_, ok := db.DataMap[id]
+		if !ok {
+			idComics <- id
 		}
-	} else {
-		// проверям, что количество которое надо вывести меньше, чем размер мапы в бд
-		countComics := math.Min(float64(numComics), float64(len(mapDb)))
-		i := 1
-		for id, comics := range mapDb {
-			// выводим countComics комиксов
-			if i <= int(countComics) {
-				printComics(i, &comics, id)
+	}
+	close(idComics)
+}
+
+// Каждые 100 обработанных комиксов оповещает пользователя
+func writeNotifications(ctx context.Context, result <-chan struct{}) {
+	count := 0
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case _, ok := <-result:
+			if !ok {
+				return
 			}
-			i++
+
+			count++
+			if count%100 == 0 {
+				fmt.Println("load " + strconv.Itoa(count) + " comics")
+			}
 		}
 	}
 }
 
-// Форматированный вывод для комикса
-func printComics(num int, comics *database.ComicsDb, id int) {
-	fmt.Println(strconv.Itoa(num) + " comics")
-	fmt.Println("id: " + strconv.Itoa(id))
-	fmt.Println("image: " + comics.Image)
-	fmt.Println("keywords: ")
-	fmt.Println(comics.KeyWords)
-	fmt.Println("--------------------------------------------")
+// Выполняет работу, также при отмене контекста заканчивает выполнение горутины
+func worker(ctx context.Context, idComics <-chan int, result chan<- struct{}, resources Resources, work funcWork) {
+	for {
+		select {
+		// заканчиваем работу
+		case <-ctx.Done():
+			return
+		// полезная работа
+		case id, ok := <-idComics:
+			// если прочитали из закрытого канала выходим, задач - нет
+			if !ok {
+				return
+			}
+
+			// работаем ...
+			work(id, resources.DataBase, resources.Client)
+
+			// пишем в канал, что обработали 1 комикс
+			result <- struct{}{}
+		}
+	}
 }
 
 // Конвертируем из xkcd.Comics в database.ComicsDb
