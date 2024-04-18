@@ -17,11 +17,12 @@ import (
 )
 
 // Парсит флаги
-func ParseFlags() string {
+func ParseFlags() (string, string) {
 	pathConfig := flag.String("c", "config.yaml", "path to config file")
+	searchLine := flag.String("s", "", "line for search comics by database.json")
 	flag.Parse()
 
-	return *pathConfig
+	return *pathConfig, *searchLine
 }
 
 // Структура для удобства передачи ресурсов в воркер
