@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
 	"os/signal"
 	"path/filepath"
 	"strconv"
@@ -59,11 +58,11 @@ func CreateDatabase(sourceUrl string, pathDb string, numGorutine int) (*database
 		return nil, fmt.Errorf("error open database: %w", err)
 	}
 
-	// создаём контекст с отменой, который передаим воркерам
-	ctx, cancel := context.WithCancel(context.Background())
-	// запускаем горутину отвечающую за перехват сигналов системы
-	// и вызов cancel() для реализации gracefully shutdown
-	go notifyEndWork(cancel)
+	ctx := context.Background()
+	// добавялем контексту отслеживание сигналов
+	// если придёт один из сигналов, он сделает вызов cancel()
+	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
+	// штатный вызов cancel() в конце функции
 	defer cancel()
 
 	resources := Resources{
@@ -76,14 +75,6 @@ func CreateDatabase(sourceUrl string, pathDb string, numGorutine int) (*database
 
 	fmt.Println(filepath.Base(pathDb) + " create")
 	return db, nil
-}
-
-// Отлавливает сигналы системы и вызывает cancel() контекста
-func notifyEndWork(cancel context.CancelFunc) {
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	<-sigChan
-	cancel()
 }
 
 // Запускает паралельную обработку
@@ -103,8 +94,8 @@ func workerPool(ctx context.Context, countWorkers int, countTasks int, resources
 		}()
 	}
 
-	// эта горутина через канал отправляет id комиксов, которые надо обработать
-	go giveTaks(countTasks, resources.DataBase, idComics)
+	// эта функция через канал отправляет id комиксов, которые надо обработать
+	giveTaks(countTasks, resources.DataBase, idComics)
 
 	// эта горутина отвечает за вывод в консоль уведоление о скачки 100 комиксов
 	go writeNotifications(ctx, result)
