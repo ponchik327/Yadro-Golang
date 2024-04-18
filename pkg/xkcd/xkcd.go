@@ -43,15 +43,45 @@ func (c *Client) GetComicsById(IdComics int) Comics {
 }
 
 // Id последнего комикса
+// Теоретически работает за O(log(n))
 func (c *Client) GetIdLastComics() int {
-	urlLastComics, err := url.JoinPath(c.SourceUrl, c.EndPoints["GetComics"])
-	if err != nil {
-		panic(err)
+
+	// c помощью экспоненциального поиска ищем промежуток в котором находится id последнего комикса
+	id := 1
+	idPrev := id
+	for c.GetComicsById(id).Id != 0 && id != 404 {
+		idPrev = id
+		id *= 2
 	}
 
-	lastComics := c.parseOneComics(urlLastComics)
+	// с помощью бинарного поиска ищем на этом отрезке нужный id
+	id = lowerBound(c, idPrev, id) - 1
 
-	return lastComics.Id
+	return id
+}
+
+// Реализация бинарного поиска для нашего случая
+// Можем представить, что у нас есть отсортированный массив [0 0 0 1 1 1], где 0 - комикс существует, а 1 - комикс не существует
+// И наш алгоритм ищет перое вхождение 1, то есть id, который следует за id последнего комикса
+func lowerBound(c *Client, low int, high int) int {
+	mid := 0
+	for low <= high {
+		mid = (low + high) / 2
+
+		var num int
+		if c.GetComicsById(mid).Id == 0 {
+			num = 1
+		} else {
+			num = 0
+		}
+
+		if num >= 1 {
+			high = mid - 1
+		} else {
+			low = mid + 1
+		}
+	}
+	return low
 }
 
 // Парсит один комикс

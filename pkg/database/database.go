@@ -3,6 +3,7 @@ package database
 import (
 	"encoding/json"
 	"os"
+	"sync"
 )
 
 // Представление даннх в бд
@@ -13,50 +14,71 @@ type ComicsDb struct {
 
 // Бд для хранения комиксов
 type DataBase struct {
-	Path string
+	Path    string
+	Mutex   sync.Mutex
+	DataMap map[int]ComicsDb
 }
 
-// Конструктор
-func NewDataBase(path string) *DataBase {
-	return &DataBase{
+// Открывает бд,
+// если файл существует, то считывает его в мапу структуры,
+// если нет, то создаёт пустой
+func Open(path string) (*DataBase, error) {
+	// создали пустую структуру
+	db := DataBase{
 		Path: path,
 	}
+
+	// проверили существование файла
+	if _, err := os.Stat(db.Path); err == nil {
+		// считали файл
+		bytes, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+
+		// переложили данные в мапу структуры
+		err = json.Unmarshal(bytes, &db.DataMap)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// инициализировали пустую мапу
+		db.DataMap = make(map[int]ComicsDb)
+
+		// преобразовали в файл
+		bytes, err := json.MarshalIndent(db.DataMap, "", "\t")
+		if err != nil {
+			return nil, err
+		}
+
+		// созадли пустой файл бд
+		err = os.WriteFile(db.Path, bytes, 0644)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &db, nil
+}
+
+// Закрывает бд, сохраняет мапу стуктуры в файл
+func (DB *DataBase) Close() error {
+	bytes, err := json.MarshalIndent(DB.DataMap, "", "\t")
+	if err != nil {
+		return err
+	}
+
+	err = os.WriteFile(DB.Path, bytes, 0644)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Добавляет комикс в бд
-func (DB *DataBase) AddOneComics(Id int, comics ComicsDb) {
-	var mapDb map[int]ComicsDb
-
-	// если добавляем первый комикс, значит файл пуст и надо создать мапу
-	if Id == 1 {
-		mapDb = make(map[int]ComicsDb)
-	} else {
-		mapDb = DB.GetDatabase()
-	}
-
-	// добавили комикс
-	mapDb[Id] = comics
-
-	// записали комикс
-	bytes, _ := json.MarshalIndent(mapDb, "", "\t")
-	os.WriteFile(DB.Path, bytes, 0644)
-}
-
-// Получаем бд из файла в виде мапы, нельзя вызывать если файла не существует
-func (DB *DataBase) GetDatabase() map[int]ComicsDb {
-	db := map[int]ComicsDb{}
-
-	// читаем файл
-	bytes, err := os.ReadFile(DB.Path)
-	if err != nil {
-		panic(err)
-	}
-
-	// заполняем мапу
-	err = json.Unmarshal(bytes, &db)
-	if err != nil {
-		panic(err)
-	}
-
-	return db
+func (DB *DataBase) AddOneComics(id int, comics ComicsDb) {
+	DB.Mutex.Lock()
+	defer DB.Mutex.Unlock()
+	DB.DataMap[id] = comics
 }
