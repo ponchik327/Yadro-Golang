@@ -171,9 +171,6 @@ fewer
 fifth
 first
 five
-followed
-following
-follows
 for
 forever
 former
