@@ -1,9 +1,7 @@
 package app
 
 import (
-	"fmt"
 	"log"
-	"time"
 
 	"github.com/ponchik327/Yadro-Golang/tree/main/internal/config"
 	"github.com/ponchik327/Yadro-Golang/tree/main/internal/search"
@@ -35,11 +33,6 @@ func RunApp() {
 		log.Fatal("error create index: " + err.Error())
 	}
 
-	start := time.Now()
-
-	search.Search(searchLine, db, index, isIndexSearch)
-
-	duration := time.Since(start)
-	fmt.Println("time search: ")
-	fmt.Println(duration.Microseconds())
+	// выполняем поиск
+	search.Search(searchLine, db, index, isIndexSearch, true)
 }

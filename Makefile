@@ -12,3 +12,6 @@ run_search:
 
 run_index_search:
 	go run cmd/xkcd/main.go -s "I'm following your questions" -i
+
+run_bencmarks:
+	go test -bench=.
