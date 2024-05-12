@@ -4,13 +4,15 @@ import (
 	"log"
 
 	"github.com/ponchik327/Yadro-Golang/tree/main/internal/config"
+	"github.com/ponchik327/Yadro-Golang/tree/main/internal/search"
 	"github.com/ponchik327/Yadro-Golang/tree/main/internal/utilsDb"
+	"github.com/ponchik327/Yadro-Golang/tree/main/pkg/index"
 )
 
 // Логика работы приложения
 func RunApp() {
 	// парсим флаги
-	pathConfig := utilsDb.ParseFlags()
+	pathConfig, searchLine, isIndexSearch := utilsDb.ParseFlags()
 
 	// загружаем конфиг из config.yaml
 	config, err := config.LoadConfig(pathConfig)
@@ -24,4 +26,13 @@ func RunApp() {
 		log.Fatal("error create database: " + err.Error())
 	}
 	defer db.Close()
+
+	// создаём индекс
+	index, err := index.CreateIndex(config.IndexFile, db)
+	if err != nil {
+		log.Fatal("error create index: " + err.Error())
+	}
+
+	// выполняем поиск
+	search.Search(searchLine, db, index, isIndexSearch, true)
 }

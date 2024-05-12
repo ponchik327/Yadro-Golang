@@ -10,6 +10,7 @@ import (
 type Config struct {
 	SourceUrl   string `yaml:"source_url"`
 	DbFile      string `yaml:"db_file"`
+	IndexFile   string `yaml:"index_file"`
 	NumGorutine int    `yaml:"parallel"`
 }
 
